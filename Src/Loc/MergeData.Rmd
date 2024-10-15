@@ -1,0 +1,111 @@
+
+---
+title: "Merging Tables for pPCA"
+output: html_notebook
+---
+
+# Load required libraries
+```{r}
+library(sqldf)
+library(tidyverse)
+```
+
+# Load datasets
+```{r}
+combine_reported <- read.csv("./Data/trait_data_reported.csv")
+combine_imputed <- read.csv("./Data/trait_data_imputed.csv")
+Elton_full <- read.csv("./Data/MamFuncDat.csv")
+MammalDiet_2015 <- read.csv("./Data/MammalDIET_v1.0.xlsx - MammalDIET_v1.0.txt.csv")
+MammalDiet_2018 <- read.csv("./Data/mam12119-sup-0001-appendixs1.csv", skip = 2, header = TRUE)
+Myhrvold <- read.csv("./Data/Amniote_Database_Aug_2015.csv")
+```
+
+# Preprocessing MammalDiet Data
+```{r}
+# Create scientific_name in MammalDiet_2015
+MammalDiet_2015 <- MammalDiet_2015 %>%
+  mutate(scientific_name = paste(Genus, Species))
+
+# Remove unnecessary columns and convert relevant columns to factors in MammalDiet_2015 and MammalDiet_2018
+MammalDiet_2015 <- MammalDiet_2015 %>%
+  select(-c(TaxonID, DataSource, TaxonomicNote, FillCode)) %>%
+  mutate(across(c(Order, Family, Genus, Species, TrophicLevel), as.factor))
+
+MammalDiet_2018 <- MammalDiet_2018 %>%
+  select(-starts_with("X"), -Bibliography) %>%
+  mutate(across(c(Order, Family, Genus, Species, TrophicLevel), as.factor))
+
+# Merge MammalDiet_2015 and MammalDiet_2018 on scientific_name
+MammalDiet_Combined <- MammalDiet_2015 %>%
+  full_join(MammalDiet_2018, by = c("scientific_name" = "Binomial"))
+
+# Coalesce matching columns and drop .x and .y suffixes
+common_cols <- names(MammalDiet_Combined)[grepl("\\.x$|\\.y$", names(MammalDiet_Combined))]
+
+for (col in unique(gsub("\\.x$|\\.y$", "", common_cols))) {
+  MammalDiet_Combined[[paste0(col, ".x")]] <- as.character(MammalDiet_Combined[[paste0(col, ".x")]])
+  MammalDiet_Combined[[paste0(col, ".y")]] <- as.character(MammalDiet_Combined[[paste0(col, ".y")]])
+  MammalDiet_Combined[[col]] <- coalesce(MammalDiet_Combined[[paste0(col, ".y")]], MammalDiet_Combined[[paste0(col, ".x")]])
+}
+
+# Drop .x and .y columns and reconvert to factors
+MammalDiet_Combined <- MammalDiet_Combined %>%
+  select(-ends_with(".x"), -ends_with(".y")) %>%
+  mutate(across(c(Order, Family, Genus, Species, TrophicLevel), as.factor))
+```
+
+# Merge with Other Datasets
+```{r}
+# Select informative columns from combine_reported and merge with MammalDiet_Combined
+iucn_informative_cols <- combine_reported %>%
+  select(-c(order, family, genus, species, phylacine_binomial))
+
+MammalDiet_Combined <- MammalDiet_Combined %>%
+  left_join(iucn_informative_cols, by = c("scientific_name" = "iucn2020_binomial"))
+
+# Select informative columns from Elton_full and merge
+elton_informative_cols <- Elton_full %>%
+  select(-c(MSWFamilyLatin))
+
+MammalDiet_Combined <- MammalDiet_Combined %>%
+  left_join(elton_informative_cols, by = c("scientific_name" = "Scientific"))
+
+# Combine 'genus' and 'species' into 'scientific_name' in Myhrvold and merge
+Myhrvold <- Myhrvold %>%
+  mutate(scientific_name = paste(genus, species))
+
+myhrvold_informative_cols <- Myhrvold %>%
+  select(-c(genus, species, class, order, family))
+
+MammalDiet_Combined <- MammalDiet_Combined %>%
+  left_join(myhrvold_informative_cols, by = "scientific_name")
+
+# View final dataframe
+print(MammalDiet_Combined)
+```
+
+# Convert Text Files to CSV
+```{r}
+setwd("./Data/txtToConvert")
+filelist = list.files(pattern = ".txt")
+
+for (input in filelist) {
+  output <- paste0(gsub("\\.txt$", "", input), ".csv")
+  print(paste("Processing the file:", input))
+  data <- read.delim(input, header = TRUE)
+  write.table(data, file = output, sep = ",", col.names = TRUE, row.names = FALSE)
+}
+```
+
+# Analyze Missing Data
+```{r}
+missing_threshold <- 0.3
+
+# Check missing data proportions
+missing_proportion_columns <- colMeans(is.na(master))
+combine_reported_clean <- master[, missing_proportion_columns <= missing_threshold]
+
+# View structure of datasets
+str(master)
+str(combine_reported)
+```

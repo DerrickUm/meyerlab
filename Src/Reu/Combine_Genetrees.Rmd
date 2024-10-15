@@ -1,0 +1,33 @@
+---
+title: "Combine Genetrees"
+output: html_notebook
+---
+
+Below, the code is for extracting the names of the files that are to be used from the directory they're located in. When you adapt the code for your use, change the path name to the parent directory of the folder where the genetrees are located, and folder name to match the actual folder where the genetrees are located.
+```{r}
+listfile<- list.files(path="C:/Users/umder/Desktop/DerrickUmLabWorkspace/Data",
+                      pattern= "txt",full.names = T, recursive = TRUE) #To include sub directories, change the recursive = TRUE, else FALSE.
+
+#extract the files with folder name AlignFiles
+listfile_genetree <- listfile[grep("AlignFiles",listfile)]
+```
+
+Below is the function that reads the filenames into a table, "dat". The "do.call" on line 28 uses lapply on all files located by the code block above, and then row-binds it to a 2-column dataframe of the gene name and genetree.
+```{r}
+#function to read all of the files and their data and return it as dat
+read_file <- function(filename) {
+  dat <- read.table(filename,header = FALSE, sep = "\t")
+  return(dat)
+}
+
+#apply to all filenames and bind them into one dataframe
+all_dat <- do.call(rbind, lapply(listfile_genetree, read_file))
+
+```
+
+Below, this is what writes it to the combined table. You can change the filename to match whatever you want. The parameters after (row.names etc.) Are so it doesn't write out the "V1 V2" etc that the dataframe in R has. By using the quote parameter it should match the output you need.
+```{r}
+write.table(all_dat, file = "combinedtrees.txt", sep = "\t",
+            row.names = FALSE, col.names = FALSE, quote = FALSE)
+```
+

@@ -1,0 +1,36 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+library("ape")
+library("phangorn")
+library("phytools")
+library("geiger")
+library("ggplot2")
+library("ggtree")
+BiocManager::install("ggtree")
+```
+
+
+```{r}
+MHiller.tree<-read.tree(file="MHillerTree.txt") 
+MHiller.tree
+plot(MHiller.tree)
+```
+```{r}
+TOGA.tree <- read.tree("ZoonomiaTOGATree.txt")
+plot(TOGA.tree)
+```
+
+```{r}
+Full.tree <- read.tree("./Data_S3_globalRAxML_files/RAxML_bipartitions.result_FIN4_raw_rooted_wBoots_4098mam1out_OK.newick")
+plot(Full.tree)
+
+```
+
+

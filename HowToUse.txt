@@ -1,0 +1,145 @@
+This is a pre-made framework for your R project. It has everything set up for 
+you, and has pre-made folders for organizing your files to the lab standard. 
+It is also ready to be linked to a github repository.
+
+How To Use: 
+  This framework has two functions, one is for organization, and one is for
+  version control (linking to a github). Each is listed in its own section.
+  
+  DO NOT CLONE THIS FOLDER FROM THE GITHUB, DOWNLOAD IT AS A ZIP FILE. 
+  
+------Organization: -------
+
+  Download this from the github, and extract the contents. You'll be reusing 
+  it, so keep it somewhere convient, and keep it empty. 
+  When you want to make a new project, make a copy of the framework, and
+  name the copy the name of my project (eg. "myProject").
+  Then, use the "new project" function in RStudio (File>New Project...)
+  and select 'from an existing directory'. Then select the renamed copy of 
+  the framework as the directory. 
+  
+  Below is a list of the folders included, and what you should use them for. 
+  
+Folders: 
+  /data -- This folder is for storing your raw data in (whatever you
+  got from experiments, the field, downloads, ect.). This folder 
+  should be treated as READ ONLY; do not modify anything in this 
+  folder with your code. 
+  
+  /results -- This is a folder for cleaning the data and holding 
+  the cleaned data. Even if you aren't cleaning your data, it's best
+  practice to make a copy of it into this folder, and only refrence
+  the results version in your code. That way, even if there is a
+  mistake, there's no way that the original data will be overwritten.
+  
+  /doc -- This folder is for holding any text associated with the
+  project. (This file in an exception as an instruction manual).
+  
+  /output -- This is a folder for holding any outputs of your code. 
+  The most common exmaple of this is graphs. 
+  
+  /src -- This is where scripts are stored:
+    
+    /reu -- This folder holds any scripts which are "resuable".
+    This could either be scripts you write in your project that you 
+    may want to use somewhere else, or scripts from somewhere else
+    you downloaded to use during the project. 
+    
+    /loc -- This folder holds any scripts which are "local."
+    These are scripts which would only be relevant to the specific
+    project they are in, and aren't going to be used anywhere else.
+    
+ 
+ 
+ 
+---------------Version Control And Connecting to Github: ----------
+
+Overview: 
+  Git is a way to track what changes have been made to a file over 
+  time (and also keep backups of old versions), among other things.
+  One useful feature is that it also makes a backup of the project 
+  in the cloud, so that it is accessible anywhere (or by other 
+  members of the lab). 
+  
+  To connect to github, you must first turn on version control locally,
+  this must be done once immediately after downloading the file. 
+  This only has to be done ONCE, and then the directory with version
+  control can be copied as a framework. 
+  
+  The second step is to connect the project to a github repository. 
+  This must be done INDIVIDUALLY FOR EACH PROJECT. Make sure that 
+  your base framework that is being copied is NOT connected to an 
+  online repository. That connection will be inherited by any copies
+  of the folder.
+  
+    
+Improtant notes:
+  gitIgnore file:
+  The .gitignore file is a list of any files you do NOT want uploaded
+  to github. 
+  This by default includes both the /data and /results directories
+  (as they can be quite large). THIS MEANS THAT ANY DATA
+  IN THESE FOLDERS IS NOT BEING BACKED UP TO THE CLOUD.
+
+  Cloning from github: 
+  If this folder was cloned from the github (instead of downloading)
+  then it will still be linked to the framework's github. Make sure 
+  that this is not the case. If the framework is already linked, 
+  the steps will not work (and you might mess up the framework). 
+  If the version control symbol (green and red symbol) is not present
+  the framework was downloaded correctly. 
+
+---- Turn On Version Control-----
+
+This step can be skipped if you are copying a local version of the folder,
+where version control was already enabled. 
+
+In the top bar, go to Tools>Version Control>Project Setup. 
+In that window, make sure thatthe 'version control' dropdown is set to "git". 
+Restart RStudio. 
+Once you have done that, the green and red symbol should appear.
+
+It is recommended that you rename the folder as "ProjectFrameworkPreGitted" 
+once you have done this, to show that git has been initialized locally.
+This framework is what can be copied to make new projects in the future.
+
+
+---- Connect to a Github repository ---- 
+
+First, make a repository on github (online). Ask for help if you don't know how.
+
+Once the repository has been made, in the middle there is a section
+titled "...or or push an existing repository from the command line".
+Copy the text from that, it should look like this: 
+
+git remote add origin https://github.com/[yourRepositoryHere]
+git branch -M main
+git push -u origin main
+
+Go into the Terminal (not console) and copy those lines into it, and
+then run it. The terminal tab is directly to the right of the console
+tab. 
+
+If this was successful, the Pull and Push (blue and green arrow) buttons
+should no longer be greyed out. 
+
+
+-----Troubleshooting Git Issues----
+
+Internal Version Control: 
+  
+  This requires that git be installed on your computer. Note that
+  "git" is different from "github", including "github desktop".
+  
+  If Version Control is working, you should see a green and red symbol 
+  right below the "profile" listing in the top bar. If you do, you're 
+  good to go. 
+  If not, make sure that you have git installed on your computer. 
+  https://git-scm.com/download/win . If you have git installed, make
+  sure that git is being used as the version control system. In the 
+  top bar (file, edit, view, ect.), go to 
+  Tools>Version Control>Project Setup. In that window, make sure that
+  the 'version control' dropdown is set to "git". 
+  Restart RStudio. 
+  Once you have done that, the green and red symbol should appear. If
+  not, ask for help. 
