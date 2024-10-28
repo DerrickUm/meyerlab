@@ -1,12 +1,16 @@
 
 ---
-title: "Merging Tables for pPCA"
+title: "Merging Tables for PCA"
 output: html_notebook
 ---
 
 # Load required libraries
 ```{r}
 library(tidyverse)
+library(corrplot)
+library(missMDA)
+library(ggplot2)
+library(reshape2)
 ```
 
 # Load datasets
@@ -17,7 +21,7 @@ Elton_full <- read.csv("C:/Users/umder/Desktop/meyerlab/Data/MamFuncDat.csv")
 MammalDiet_2015 <- read.csv("C:/Users/umder/Desktop/meyerlab/Data/MammalDIET_v1.0.xlsx - MammalDIET_v1.0.txt.csv")
 MammalDiet_2018 <- read.csv("C:/Users/umder/Desktop/meyerlab/Data/mam12119-sup-0001-appendixs1.csv", skip = 2, header = TRUE)
 Myhrvold <- read.csv("C:/Users/umder/Desktop/meyerlab/Data/Amniote_Database_Aug_2015.csv")
-
+Dietary_Guild <- read.csv("C:/Users/umder/Desktop/meyerlab/Data/doi_10_5061_dryad_83bk3j9vk__v20230127/Supplemental_data_1_diet_dataset.csv")
 ```
 
 # Preprocessing MammalDiet Data
@@ -56,43 +60,32 @@ MammalDiet_Combined <- MammalDiet_Combined %>%
 
 # Merge with Other Datasets
 ```{r}
-# Select informative columns from combine_reported and merge with MammalDiet_Combined
-iucn_informative_cols <- combine_reported %>%
-  select(-c(order, family, genus, species, phylacine_binomial))
-
+# Merge IUCN, Elton_full, Myhrvold datasets with MammalDiet_Combined
 MammalDiet_Combined <- MammalDiet_Combined %>%
-  left_join(iucn_informative_cols, by = c("scientific_name" = "iucn2020_binomial"))
+  left_join(select(combine_reported, -c(order, family, genus, species, phylacine_binomial)), by = c("scientific_name" = "iucn2020_binomial")) %>%
+  left_join(select(Elton_full, -c(MSWFamilyLatin)), by = c("scientific_name" = "Scientific"))
 
-# Select informative columns from Elton_full and merge
-elton_informative_cols <- Elton_full %>%
-  select(-c(MSWFamilyLatin))
-
-MammalDiet_Combined <- MammalDiet_Combined %>%
-  left_join(elton_informative_cols, by = c("scientific_name" = "Scientific"))
-
-# Combine 'genus' and 'species' into 'scientific_name' in Myhrvold and merge
 Myhrvold <- Myhrvold %>%
-  mutate(scientific_name = paste(genus, species))
-
-myhrvold_informative_cols <- Myhrvold %>%
+  mutate(scientific_name = paste(genus, species)) %>%
   select(-c(genus, species, class, order, family))
 
 MammalDiet_Combined <- MammalDiet_Combined %>%
-  left_join(myhrvold_informative_cols, by = "scientific_name")
+  left_join(Myhrvold, by = "scientific_name") %>%
+  select(-c(subspecies, common_name, MSW3_ID, Diet.Source, ForStrat.Comment, BodyMass.Source, Activity.Source, island_endemicity)) %>%
+  mutate_if(is.character, factor)
 
-# View final dataframe
-print(MammalDiet_Combined)
-str(MammalDiet_Combined)
+# Join Dietary Guild data
+Dietary_1400 <- right_join(MammalDiet_Combined, Dietary_Guild, by = c("scientific_name" = "Binomial"))
+
 ```
 
 # Convert Text Files to CSV
 ```{r}
 setwd("./Data/txtToConvert")
-filelist = list.files(pattern = ".txt")
+filelist <- list.files(pattern = ".txt")
 
 for (input in filelist) {
   output <- paste0(gsub("\\.txt$", "", input), ".csv")
-  print(paste("Processing the file:", input))
   data <- read.delim(input, header = TRUE)
   write.table(data, file = output, sep = ",", col.names = TRUE, row.names = FALSE)
 }
@@ -100,58 +93,37 @@ for (input in filelist) {
 
 # Analyze Missing Data
 ```{r}
-missing_threshold <- 0.3
+missing_threshold <- 0.1
+Dietary_1400 <- Dietary_1400[, colMeans(is.na(Dietary_1400)) <= missing_threshold]
+Dietary_1400 <- na.omit(Dietary_1400)
 
-# Check missing data proportions
-missing_proportion_columns <- colMeans(is.na(master))
-combine_reported_clean <- master[, missing_proportion_columns <= missing_threshold]
-
-# View structure of datasets
-str(master)
-str(combine_reported)
 ```
 
 PRELIM EDA BELOW, LOCK IN THIS WEEK AND FILTER DOWN (actually ask for help)
 ```{r}
-# Descriptive statistics for selected biological traits
-MammalDiet_summary <- MammalDiet_Combined %>%
-  summarise(
-    Mass_Mean = mean(adult_mass_g, na.rm = TRUE),
-    Mass_SD = sd(adult_mass_g, na.rm = TRUE),
-    Length_Mean = mean(adult_body_length_mm, na.rm = TRUE),
-    Length_SD = sd(adult_body_length_mm, na.rm = TRUE),
-    Altitude_Mean = mean(altitude_breadth_m, na.rm = TRUE),
-    Altitude_SD = sd(altitude_breadth_m, na.rm = TRUE)
-  )
-MammalDiet_summary
+# Descriptive statistics
+MammalDiet_summary <- summarise(MammalDiet_Combined,
+  Mass_Mean = mean(adult_mass_g, na.rm = TRUE),
+  Mass_SD = sd(adult_mass_g, na.rm = TRUE),
+  Length_Mean = mean(adult_body_length_mm, na.rm = TRUE),
+  Length_SD = sd(adult_body_length_mm, na.rm = TRUE),
+  Altitude_Mean = mean(altitude_breadth_m, na.rm = TRUE),
+  Altitude_SD = sd(altitude_breadth_m, na.rm = TRUE)
+)
+print(MammalDiet_summary)
 
-```
-PRELIM MASS DIST
-```{r}
-mass_dist <- ggplot(MammalDiet_Combined, aes(x = adult_mass_g)) +
+# Histogram for Adult Mass Distribution
+mass_dist <- ggplot(Dietary_1400, aes(x = adult_mass_g)) +
   geom_histogram(binwidth = 50, fill = 'green', color = 'black') +
   labs(title = "Adult Mass Distribution", x = "Adult Mass (g)", y = "Frequency") +
-  theme_classic() +
-  theme(
-    text = element_text(size = 12),
-    axis.title = element_text(size = 14),
-    plot.title = element_text(size = 16)
-  )
+  theme_classic()
 ggsave(filename = "Adult_Mass.png", plot = mass_dist, width = 10, height = 8, dpi = 300)
 
-```
-
-PRELIM PLANT DIST
-```{r}
-diet_dist <- ggplot(MammalDiet_Combined, aes(x = Diet.PlantO)) +
+# Bar plot for Plant Diet Distribution
+diet_dist <- ggplot(Dietary_1400, aes(x = Diet.PlantO)) +
   geom_bar(fill = 'purple', color = 'black') +
   labs(title = "Plant Diet Distribution", x = "Plant Diet Percentage", y = "Count") +
-  theme_classic() +
-  theme(
-    text = element_text(size = 12),
-    axis.title = element_text(size = 14),
-    plot.title = element_text(size = 16)
-  )
+  theme_classic()
 ggsave(filename = "Diet_PlantO.png", plot = diet_dist, width = 10, height = 8, dpi = 300)
 
 ```
@@ -197,18 +169,62 @@ for (variable_name in variables_to_plot) {
 
 ```
 
-CORRELATION & ANOVA
+```{r}
+# Visualize correlations using a heatmap to highlight areas of concern
+melted_corr <- melt(correlations)
+
+ggplot(data = melted_corr, aes(x=Var1, y=Var2, fill=value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "red", high = "blue", mid = "white", 
+                       midpoint = 0, limit = c(-1, 1), space = "Lab", 
+                       name="Correlation") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                   size = 12, hjust = 1)) +
+  coord_fixed()
+```
+
+```{r}
+# Identify all numeric variables in Dietary_1400 and calculate correlations
+numeric_vars <- Dietary_1400 %>% select_if(is.numeric)
+
+# Calculate correlation matrix and convert to data frame format
+correlations <- cor(numeric_vars, use = "complete.obs")
+cor_df <- as.data.frame(as.table(correlations)) %>%
+  filter(Var1 != Var2, abs(Freq) >= 0.9)
+
+# Identify and retain one variable from each highly correlated pair
+to_remove <- cor_df %>%
+  mutate(var_order = pmap_chr(list(Var1, Var2), ~ paste(sort(c(...)), collapse = " "))) %>%
+  group_by(var_order) %>%
+  slice(1) %>%
+  ungroup() %>%
+  pull(Var2)
+
+# Update Dietary_1400 by selecting only non-correlated variables
+Dietary_1400 <- Dietary_1400 %>% select(-one_of(to_remove))
+
+# View remaining non-correlated variables
+print(names(Dietary_1400))
+
+```
+
+
 ```{r}
 # Identify all numeric variables
-numeric_vars <- MammalDiet_Combined %>% 
+numeric_vars <- Dietary_1400 %>% 
   select_if(is.numeric)
+Dietary_1400$Diet_category <- as.factor(Dietary_1400$Diet_category)
+Dietary_1400$Diet_category <- as.numeric(Dietary_1400$Diet_category)
 
-# Calculate correlations with 'adult_mass_g'
-correlations <- sapply(numeric_vars, function(x) cor(x, MammalDiet_Combined$adult_mass_g, 
-                                                     use = "complete.obs"))
-
-# View the correlation coefficients
+# Calculate correlations with
+correlations <- cor(numeric_vars, use = "complete.obs")
 print(correlations)
+```
+
+CORRELATION & ANOVA
+```{r}
+
 
 # Select only categorical variables
 cat_vars <- MammalDiet_Combined %>% select_if(is.factor)
@@ -225,6 +241,30 @@ names(anova_results) <- names(cat_vars)
 
 # Now you can view the ANOVA results for each categorical variable
 anova_results
+
+```
+
+```{r}
+# Prepare numeric variables and handle multicollinearity
+Dietary_1400 <- na.omit(Dietary_1400)
+numeric_vars <- Dietary_1400 %>% select_if(is.numeric)
+numeric_vars_clean <- numeric_vars[, apply(numeric_vars, 2, var) != 0]
+numeric_vars_scaled <- scale(numeric_vars_clean)
+
+# PCA
+pca_result <- prcomp(numeric_vars_scaled, center = TRUE, scale. = TRUE)
+
+# PCA Summary
+variance_explained <- summary(pca_result)$importance[2, 1:4]
+print(variance_explained)
+
+# PCA plot with clusters
+pca_df <- as.data.frame(pca_result$x)
+ggplot(pca_df, aes(x = PC1, y = PC2)) +
+  geom_point(size = 2) +
+  labs(title = "PCA Plot", x = "PC1", y = "PC2") +
+  theme_minimal()
+
 
 ```
 
