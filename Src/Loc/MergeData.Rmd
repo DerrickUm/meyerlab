@@ -56,6 +56,8 @@ for (col in unique(gsub("\\.x$|\\.y$", "", common_cols))) {
 MammalDiet_Combined <- MammalDiet_Combined %>%
   select(-ends_with(".x"), -ends_with(".y")) %>%
   mutate(across(c(Order, Family, Genus, Species, TrophicLevel), as.factor))
+
+str(MammalDiet_Combined)
 ```
 
 # Merge with Other Datasets
@@ -79,24 +81,36 @@ Dietary_1400 <- right_join(MammalDiet_Combined, Dietary_Guild, by = c("scientifi
 
 ```
 
-# Convert Text Files to CSV
-```{r}
-setwd("./Data/txtToConvert")
-filelist <- list.files(pattern = ".txt")
-
-for (input in filelist) {
-  output <- paste0(gsub("\\.txt$", "", input), ".csv")
-  data <- read.delim(input, header = TRUE)
-  write.table(data, file = output, sep = ",", col.names = TRUE, row.names = FALSE)
-}
-```
-
 # Analyze Missing Data
 ```{r}
 missing_threshold <- 0.1
 Dietary_1400 <- Dietary_1400[, colMeans(is.na(Dietary_1400)) <= missing_threshold]
 Dietary_1400 <- na.omit(Dietary_1400)
 
+MammalDiet_Combined <- MammalDiet_Combined[, colMeans(is.na(MammalDiet_Combined)) <= missing_threshold]
+MammalDiet_Combined <- na.omit(MammalDiet_Combined)
+
+```
+
+```{r}
+# Identify all numeric variables in Dietary_1400
+numeric_vars <- Dietary_1400 %>% select_if(is.numeric)
+
+# Calculate the correlation matrix and remove highly correlated variables (>= 0.9)
+correlations <- cor(numeric_vars, use = "complete.obs")
+cor_df <- as.data.frame(as.table(correlations)) %>%
+  filter(Var1 != Var2, abs(Freq) >= 0.9)
+
+# Identify and retain one variable from each highly correlated pair
+to_remove <- cor_df %>%
+  mutate(var_order = pmap_chr(list(Var1, Var2), ~ paste(sort(c(...)), collapse = " "))) %>%
+  group_by(var_order) %>%
+  slice(1) %>%
+  ungroup() %>%
+  pull(Var2)
+
+# Update Dietary_1400 by selecting only non-correlated variables
+Dietary_1400 <- Dietary_1400 %>% select(-one_of(to_remove))
 ```
 
 PRELIM EDA BELOW, LOCK IN THIS WEEK AND FILTER DOWN (actually ask for help)
@@ -185,10 +199,10 @@ ggplot(data = melted_corr, aes(x=Var1, y=Var2, fill=value)) +
 ```
 
 ```{r}
-# Identify all numeric variables in Dietary_1400 and calculate correlations
+# Identify all numeric variables in Dietary_1400
 numeric_vars <- Dietary_1400 %>% select_if(is.numeric)
 
-# Calculate correlation matrix and convert to data frame format
+# Calculate the correlation matrix and remove highly correlated variables (>= 0.9)
 correlations <- cor(numeric_vars, use = "complete.obs")
 cor_df <- as.data.frame(as.table(correlations)) %>%
   filter(Var1 != Var2, abs(Freq) >= 0.9)
@@ -203,68 +217,51 @@ to_remove <- cor_df %>%
 
 # Update Dietary_1400 by selecting only non-correlated variables
 Dietary_1400 <- Dietary_1400 %>% select(-one_of(to_remove))
+```
+```{r}
+# Visualize correlations using a heatmap to highlight areas of concern
+melted_corr <- melt(correlations)
 
-# View remaining non-correlated variables
-print(names(Dietary_1400))
-
+ggplot(data = melted_corr, aes(x=Var1, y=Var2, fill=value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "red", high = "blue", mid = "white", 
+                       midpoint = 0, limit = c(-1, 1), space = "Lab", 
+                       name="Correlation") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                   size = 12, hjust = 1)) +
+  coord_fixed()
 ```
 
 
 ```{r}
-# Identify all numeric variables
-numeric_vars <- Dietary_1400 %>% 
-  select_if(is.numeric)
-Dietary_1400$Diet_category <- as.factor(Dietary_1400$Diet_category)
-Dietary_1400$Diet_category <- as.numeric(Dietary_1400$Diet_category)
+# Z-score transformation to rescale variables, handling non-independence and underweighting issues
+numeric_vars_scaled <- Dietary_1400 %>%
+  select_if(is.numeric) %>%
+  select_if(~ var(.) != 0) %>%
+  scale()
 
-# Calculate correlations with
-correlations <- cor(numeric_vars, use = "complete.obs")
-print(correlations)
-```
-
-CORRELATION & ANOVA
-```{r}
-
-
-# Select only categorical variables
-cat_vars <- MammalDiet_Combined %>% select_if(is.factor)
-
-# Loop through each categorical variable and perform ANOVA
-anova_results <- lapply(names(cat_vars), function(var) {
-  formula <- as.formula(paste("adult_mass_g ~", var))
-  anova_test <- aov(formula, data = MammalDiet_Combined)
-  return(summary(anova_test))
-})
-
-# Name the list elements for easier identification
-names(anova_results) <- names(cat_vars)
-
-# Now you can view the ANOVA results for each categorical variable
-anova_results
-
-```
-
-```{r}
-# Prepare numeric variables and handle multicollinearity
-Dietary_1400 <- na.omit(Dietary_1400)
-numeric_vars <- Dietary_1400 %>% select_if(is.numeric)
-numeric_vars_clean <- numeric_vars[, apply(numeric_vars, 2, var) != 0]
-numeric_vars_scaled <- scale(numeric_vars_clean)
-
-# PCA
+# Run PCA on the scaled data
 pca_result <- prcomp(numeric_vars_scaled, center = TRUE, scale. = TRUE)
 
-# PCA Summary
+# UPGMA cluster analysis on PCA scores
+library(cluster)
+distances <- dist(pca_result$x, method = "euclidean")
+upgma_cluster <- hclust(distances, method = "average")
+
+# Plot PCA results with UPGMA clustering dendrogram
+plot(upgma_cluster, main = "UPGMA Dendrogram based on PCA Scores", xlab = "Species", sub = "", cex = 0.7)
+
+# PCA summary for explained variance
 variance_explained <- summary(pca_result)$importance[2, 1:4]
 print(variance_explained)
 
-# PCA plot with clusters
+# PCA scatter plot for first two principal components
 pca_df <- as.data.frame(pca_result$x)
 ggplot(pca_df, aes(x = PC1, y = PC2)) +
   geom_point(size = 2) +
-  labs(title = "PCA Plot", x = "PC1", y = "PC2") +
+  labs(title = "PCA Plot with Z-scored Variables", x = "PC1", y = "PC2") +
   theme_minimal()
-
 
 ```
 

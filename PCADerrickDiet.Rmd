@@ -1,0 +1,55 @@
+---
+title: "PCA on Diet Classification Data"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(cluster)
+library(ggplot2)
+```
+
+
+```{r}
+diet_data <- classified_df
+```
+
+```{r}
+
+numeric_vars_scaled <- diet_data %>%
+  select(where(is.numeric)) %>%
+  select_if(~ var(.) != 0) %>%  # Removes columns with zero variance
+  scale()
+
+# Run PCA on the scaled data
+pca_result <- prcomp(numeric_vars_scaled, center = TRUE, scale. = TRUE)
+
+# UPGMA clustering on PCA scores
+distances <- dist(pca_result$x, method = "euclidean")
+upgma_cluster <- hclust(distances, method = "average")
+
+# Plot UPGMA dendrogram
+plot(upgma_cluster, main = "UPGMA Dendrogram based on PCA Scores", xlab = "Species", sub = "", cex = 0.7)
+
+# Summary of explained variance for the first four components
+variance_explained <- summary(pca_result)$importance[2, 1:4]
+print(variance_explained)
+
+# Prepare PCA data for plotting with Diet_Class color-coded grouping
+pca_df <- as.data.frame(pca_result$x)
+pca_df$Diet_Class <- diet_data$Diet_Class  # Adding Diet_Class for grouping
+
+# Define color palette for Diet_Class groups
+color_palette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", 
+                   "#0072B2", "#D55E00", "#CC79A7", "#000000", "maroon")
+
+# Plot PCA scatter plot with color-coded grouping by Diet_Class
+ggplot(pca_df, aes(x = PC1, y = PC2, color = Diet_Class)) +
+  geom_point(size = 2) +
+  labs(title = "PCA Plot with Z-scored Variables", x = "PC1", y = "PC2") +
+  scale_color_manual(values = color_palette) +
+  theme_minimal() +
+  theme(legend.title = element_text(size = 10), legend.text = element_text(size = 8))
+
+# Save the PCA plot as PDF (optional)
+ggsave("C:/Users/umder/Desktop/meyerlab/Data/pca_plot_diet_class.pdf", width = 8, height = 6)

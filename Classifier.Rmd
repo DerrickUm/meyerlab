@@ -1,0 +1,119 @@
+---
+title: "Classification Alg"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+#change to your filepath
+Elton_full <- read.csv("C:/Users/umder/Desktop/meyerlab/Data/MamFuncDat.csv")
+```
+
+```{r}
+# Define adjustable labels
+label_generalist <- "Generalist"
+label_for_examination <- "For Examination"
+label_missing_data <- "MissingData"
+
+classify_diet <- function(df, upper_cutoff = 90, lower_cutoff = 50) {
+  
+  # Diet variables and corresponding names
+  diet_vars <- c("Diet.Inv", "Diet.Vend", "Diet.Vect", "Diet.Vfish", 
+                 "Diet.Vunk", "Diet.Scav", "Diet.Fruit", "Diet.Nect", 
+                 "Diet.Seed", "Diet.PlantO")
+  ivore_names <- c("Invertebrate-eater", "Carnivore", "Herpetivore", "Piscivore", 
+                   "Vertebrate-eater", "Scavenger", "Frugivore", 
+                   "Nectarivore", "Granivore", "Herbivore")
+  
+  # Create new variables for combined diet categories
+  df <- df %>%
+    mutate(Diet.VertTerrestrial = Diet.Vend + Diet.Vect + Diet.Vunk,
+           Diet.VertAll = Diet.VertTerrestrial + Diet.Vfish,
+           Diet.AnimalsAll = Diet.VertAll + Diet.Inv,
+           Diet.PlantHighSugar = Diet.Fruit + Diet.Nect,
+           Diet.PlantLowSugar = Diet.Seed + Diet.PlantO,
+           Diet.PlantAll = Diet.PlantHighSugar + Diet.PlantLowSugar)
+
+  # Initial classification based on cutoff thresholds
+  df$Diet_Class <- apply(df[diet_vars], 1, function(row) {
+    if (all(is.na(row))) {
+      return(label_missing_data)  # Handle missing data explicitly
+    }
+    above_cutoff <- row >= upper_cutoff
+    between_lower_and_upper <- row >= lower_cutoff & row < upper_cutoff
+    
+    if (any(above_cutoff, na.rm = TRUE)) {
+      return(ivore_names[which(above_cutoff)[1]])
+    } else if (all(row < lower_cutoff, na.rm = TRUE)) {
+      return(label_generalist)
+    } else if (any(between_lower_and_upper, na.rm = TRUE)) {
+      return(label_for_examination)
+    }
+  })
+
+  # Secondary classification for Generalists and For Examination using combined categories
+  combined_diet_vars <- c("Diet.VertTerrestrial", "Diet.VertAll", "Diet.AnimalsAll",
+                          "Diet.PlantHighSugar", "Diet.PlantLowSugar", "Diet.PlantAll")
+  combined_ivore_names <- c("Terrestrial vertebrates", "All vertebrates", "Animalia Generalist",
+                            "High sugar plants", "Low sugar plants", "Plantae Generalist")
+
+  # Reclassify Generalists
+  generalists <- df %>% filter(Diet_Class == label_generalist)
+  generalists$Diet_Class <- apply(generalists[combined_diet_vars], 1, function(row) {
+    above_cutoff <- row >= upper_cutoff
+    if (any(above_cutoff, na.rm = TRUE)) {
+      return(combined_ivore_names[which(above_cutoff)[1]])
+    }
+    return(label_generalist)
+  })
+
+  # Reclassify For Examination
+  for_examination <- df %>% filter(Diet_Class == label_for_examination)
+  for_examination$Diet_Class <- apply(for_examination[combined_diet_vars], 1, function(row) {
+    above_cutoff <- row >= upper_cutoff
+    if (any(above_cutoff, na.rm = TRUE)) {
+      return(combined_ivore_names[which(above_cutoff)[1]])
+    }
+    return(label_for_examination)
+  })
+
+  # Combine reclassified data
+  df <- df %>% filter(Diet_Class != label_generalist) %>% bind_rows(generalists)
+  df <- df %>% filter(Diet_Class != label_for_examination) %>% bind_rows(for_examination)
+
+  return(df)
+}
+
+# Run the classification function
+classified_df <- classify_diet(Elton_full, 90, 50)
+
+# Summarize classifications
+classification_summary <- classified_df %>%
+  group_by(Diet_Class) %>%
+  summarise(Count = n(), .groups = "drop")
+
+print(classification_summary)
+
+# Filter further examination and generalist classes
+further_examination <- filter(classified_df, Diet_Class == label_for_examination)
+print(further_examination)
+
+generalist <- filter(classified_df, Diet_Class == label_generalist)
+print(generalist)
+
+```
+
+```{r}
+sampled_df <- classified_df %>%
+  group_by(Diet_Class) %>%
+  sample_n(size = 3, replace = TRUE) %>% # Use replace = FALSE if you are sure each class has at least 3 members
+  ungroup()
+
+# Save the sampled data to a CSV file
+write.csv(sampled_df, "C:/Users/umder/Desktop/meyerlab/Data/Sampled_Diet_Class.csv", row.names = FALSE)
+```
+
+```{r}
+write.csv(classified_df, "C:/Users/umder/Desktop/meyerlab/Data/Derrick_Diet_Class.csv", row.names = FALSE)
+```
+
